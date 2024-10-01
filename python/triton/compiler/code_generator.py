@@ -1281,7 +1281,9 @@ def ast_to_ttir(fn, specialization, context, options, codegen_fns, module_map):
     cst_key = lambda i: fn.arg_names.index(i) if isinstance(i, str) else i
     constants = {cst_key(key): value for key, value in specialization.constants.items()}
     # visit kernel AST
+    print("[ast_to_ttir] fn:", fn)
     gscope = fn.__globals__.copy()
+    print("[ast_to_ttir] gsocpe:", gscope)
     function_name = fn.repr(specialization)
     tys = list(specialization.signature.values())
     new_constants = {k: True if k in tys and tys[k] == "i1" else 1 for k in attrs.equal_to_1}
@@ -1289,14 +1291,17 @@ def ast_to_ttir(fn, specialization, context, options, codegen_fns, module_map):
 
     all_constants = constants.copy()
     all_constants.update(new_constants)
+    print("[ast_to_ttir] all_constants:", all_constants)
     arg_types = [str_to_ty(v) for k, v in specialization.signature.items() if k not in specialization.constants]
+    print("[ast_to_ttir] arg_types:", arg_types)
     file_name, begin_line = get_jit_fn_file_line(fn)
 
     prototype = language.function_type([], arg_types)
     generator = CodeGenerator(context, prototype, gscope=gscope, constants=all_constants, function_name=function_name,
                               jit_fn=fn, attributes=new_attrs, is_kernel=True, file_name=file_name,
                               begin_line=begin_line, options=options, codegen_fns=codegen_fns, module_map=module_map)
-    generator.visit(fn.parse())
+    # print("[ast_to_ttir] fn.parse():", fn.parse()) # ast.Module
+    generator.visit(fn.parse()) # fn.parse() return AST tree for fn
 
     ret = generator.module
     # module takes ownership of the context

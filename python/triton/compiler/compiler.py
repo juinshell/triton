@@ -239,20 +239,27 @@ def filter_traceback(e: BaseException):
 def compile(src, target=None, options=None):
     if target is None:
         target = driver.active.get_current_target()
+    print("[triton.compile()] target:", target)
     assert isinstance(target, GPUTarget), "target must be of GPUTarget type"
-    backend = make_backend(target)
+    backend = make_backend(target) # find compiler and driver in python/triton/backends/${ARCH}/
     ir_source = not isinstance(src, ASTSource)
     # create backend
     if ir_source:
         assert isinstance(src, str), "source must be either AST or a filepath"
         src = IRSource(src)
     extra_options = src.parse_options()
-    options = backend.parse_options(dict(options or dict(), **extra_options))
+    print("[triton.compile()] extra_options:", extra_options)
+    options = backend.parse_options(dict(options or dict(), **extra_options)) # fill in some default options
+    print("[triton.compile()] options:", options)
     # create cache manager
     env_vars = get_cache_invalidating_env_vars()
+    print("[triton.compile()] env_vars:", env_vars)
     key = f"{triton_key()}-{src.hash()}-{backend.hash()}-{options.hash()}-{str(sorted(env_vars.items()))}"
+    # print("[triton.compile()] key:", key)
     hash = hashlib.sha256(key.encode("utf-8")).hexdigest()
     fn_cache_manager = get_cache_manager(hash)
+    # print("[triton.compile()] fn_cache_manager:", fn_cache_manager)
+    
     # For dumping/overriding only hash the source as we want it to be independent of triton
     # core changes to make it easier to track kernels by hash.
     enable_override = os.environ.get("TRITON_KERNEL_OVERRIDE", "0") == "1"
@@ -263,10 +270,13 @@ def compile(src, target=None, options=None):
     # The final file name in the cache will have a format of f"{filename}.{ext}.tmp.pid_{pid}_{uuid}".
     # A PID string can be 5-character long. A UUID string has typically 36 characters. Let's truncate
     # the file name to 150 characters to be safe.
-    file_name = src.name[:150]
+    file_name = src.name[:150] # kernel name
     metadata_filename = f"{file_name}.json"
+    # print("[triton.compile()] metadata_filename:", metadata_filename)
     metadata_group = fn_cache_manager.get_group(metadata_filename) or {}
+    print("[triton.compile()] metadata_group:", metadata_group)
     metadata_path = metadata_group.get(metadata_filename)
+    print("[triton.compile()] metadata_path:", metadata_path)
     always_compile = os.environ.get("TRITON_ALWAYS_COMPILE", "0") == "1"
     if not always_compile and metadata_path is not None:
         # cache hit!
@@ -281,7 +291,7 @@ def compile(src, target=None, options=None):
     }
     # run compilation pipeline  and populate metadata
     stages = dict()
-    backend.add_stages(stages, options)
+    backend.add_stages(stages, options) # for nvidia, stages have ["ttir", "ttgir", "llir", "ptx", "cubin"]
     first_stage = list(stages.keys()).index(src.ext)
     # when the source is an IR file, don't apply the passes related to this stage. This makes it easier to write IR level tests.
     if ir_source:
@@ -298,6 +308,7 @@ def compile(src, target=None, options=None):
         raise
     use_ir_loc = os.environ.get("USE_IR_LOC", None)
     for ext, compile_ir in list(stages.items())[first_stage:]:
+        print("[triton.compile()] stage:", ext)
         next_module = compile_ir(module, metadata)
         ir_filename = f"{file_name}.{ext}"
         if (fn_override_manager is not None and (full_name := fn_override_manager.get_file(ir_filename)) is not None):
@@ -312,6 +323,8 @@ def compile(src, target=None, options=None):
             next_module.create_location_snapshot(ir_full_name)
             print(f"Creating new locations for {ir_full_name}")
         module = next_module
+        # with open(f"/home/jxdeng/workspace/shmem-triton/{ir_filename}", "w") as f:
+        #     f.write(module)
     # write-back metadata
     metadata_group[metadata_filename] = fn_cache_manager.put(json.dumps(metadata, default=vars), metadata_filename,
                                                              binary=False)
