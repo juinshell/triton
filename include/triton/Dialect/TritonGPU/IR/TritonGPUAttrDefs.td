@@ -56,7 +56,6 @@ Right now, Triton implements two main classes of layouts: shared, and distribute
   code extraBaseClassDeclaration = [{
     unsigned getTotalElemsPerThread(ArrayRef<int64_t> shape, Type eltTy) const;
     SmallVector<unsigned> getElemsPerThread(ArrayRef<int64_t> shape, Type eltTy) const;
-    ::mlir::LogicalResult verifyLayoutForArg(::mlir::Operation* op, unsigned argNo) const;
   }];
 }
 
@@ -147,7 +146,6 @@ addition, if there's only one CTA per CGA, then Triton canonicalizes CTAOrder to
   let genVerifyDecl = 1;
   let skipDefaultBuilders = 1;
 }
-
 //===----------------------------------------------------------------------===//
 // Shared Layout Encoding
 //===----------------------------------------------------------------------===//
@@ -570,6 +568,39 @@ L(T) = [ {0,8} , {1,9} , {2,10}, {3,11}, {0,8} , {1, 9} , {2, 10}, {3, 11},
     std::optional<LinearLayout> toLinearLayout(ArrayRef<int64_t> shape) const;
   }];
 }
+
+//===----------------------------------------------------------------------===//
+// Linear Layout Encoding
+//===----------------------------------------------------------------------===//
+
+def LinearEncodingAttr : DistributedEncoding<"LinearEncoding", "linear_encoding"> {
+  let mnemonic = "linear";
+
+  let description = [{
+    See the docs in LinearLayout.h for the definition of linear layouts.
+  }];
+
+  let parameters = (
+    ins
+    "LinearLayout":$linearLayout,
+    ArrayRefParameter<"unsigned">:$repOrder__
+  );
+
+  let builders = [
+    AttrBuilder<(ins "const LinearLayout&":$linearLayout, "ArrayRef<unsigned>":$repOrder)>
+  ];
+
+
+  let extraClassDeclaration = extraDistributedDeclaration # [{
+    SmallVector<unsigned> getContigPerThread() const;
+    SmallVector<unsigned> getOrder() const;
+  }];
+
+  let genVerifyDecl = 1;
+  let hasCustomAssemblyFormat = 1;
+  let skipDefaultBuilders = 1;
+}
+
 
 //===----------------------------------------------------------------------===//
 // Blocked Layout Encoding
