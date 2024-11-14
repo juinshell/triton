@@ -138,9 +138,8 @@ public:
 
   // FIXME [Dot LL]
   // Do for all DotOperandEncodingAttr once we have LLs for all of them
-  static bool isSupportedDotOpLayout(RankedTensorType srcTy,
+  static bool isSupportedDotOpLayout(SharedEncodingAttr srcLayout,
                                      RankedTensorType dstTy) {
-    auto srcLayout = cast<SharedEncodingAttr>(srcTy.getEncoding());
     auto dstLayout = dstTy.getEncoding();
     auto bitwidth = dstTy.getElementType().getIntOrFloatBitWidth();
     auto rank = dstTy.getRank();
@@ -165,12 +164,11 @@ public:
                   ConversionPatternRewriter &rewriter) const override {
     MemDescType srcTy = op.getSrc().getType();
     RankedTensorType dstTy = op.getType();
-    Attribute srcLayout = srcTy.getEncoding();
+    auto srcLayout = cast<SharedEncodingAttr>(srcTy.getEncoding());
     Attribute dstLayout = dstTy.getEncoding();
-    assert(isa<SharedEncodingAttr>(srcLayout) && "Unexpected src layout");
     if ((isa<BlockedEncodingAttr, MmaEncodingTrait, SliceEncodingAttr>(
              dstLayout) ||
-         isSupportedDotOpLayout(srcTy, dstTy))) {
+         isSupportedDotOpLayout(srcLayout, dstTy))) {
       return lowerSharedToDistributed(op, adaptor, getTypeConverter(),
                                       rewriter);
     }
@@ -210,7 +208,8 @@ private:
     auto dstShape = dstTy.getShape();
     auto srcSharedLayout = cast<SharedEncodingAttr>(srcTy.getEncoding());
     auto dstLayout = dstTy.getEncoding();
-    assert((dstShape.size() <= 2 || isSupportedDotOpLayout(dstTy)) &&
+    assert((dstShape.size() <= 2 ||
+            isSupportedDotOpLayout(srcSharedLayout, dstTy)) &&
            "Unexpected rank of ConvertLayout(shared->distributed)");
 
     auto smemObj = LLVM::getSharedMemoryObjectFromStruct(
