@@ -932,23 +932,26 @@ LinearLayout ampereDotToLinearLayout(ArrayRef<int64_t> shape,
   auto warpsPerCTAMma = mma.getWarpsPerCTA();
   std::vector<std::vector<int32_t>> warps;
   if (isA) {
-    for (int i = 1; i < warpsPerCTAMma[1]; i *= 2) {
+    for (int i = 1; i < warpsPerCTAMma[rank - 1]; i *= 2) {
       warps.push_back({0, 0});
     }
-    for (int i = 1; i < warpsPerCTAMma[0]; i *= 2) {
+    for (int i = 1; i < warpsPerCTAMma[rank - 2]; i *= 2) {
       warps.push_back({0, i});
     }
   } else {
-    for (int i = 1; i < warpsPerCTAMma[1]; i *= 2) {
+    for (int i = 1; i < warpsPerCTAMma[rank - 2]; i *= 2) {
       warps.push_back({0, i});
     }
-    for (int i = 1; i < warpsPerCTAMma[0]; i *= 2) {
+    for (int i = 1; i < warpsPerCTAMma[rank - 1]; i *= 2) {
       warps.push_back({0, 0});
     }
   }
   if (rank == 3) {
     for (auto &w : warps) {
       w.push_back(0);
+    }
+    for (int i = 1; i < warpsPerCTAMma[0]; i *= 2) {
+      warps.push_back({0, 0, i});
     }
   }
 
