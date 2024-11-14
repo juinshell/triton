@@ -939,10 +939,10 @@ LinearLayout ampereDotToLinearLayout(ArrayRef<int64_t> shape,
       warps.push_back({0, i});
     }
   } else {
-    for (int i = 1; i < warpsPerCTAMma[rank - 2]; i *= 2) {
+    for (int i = 1; i < warpsPerCTAMma[rank - 1]; i *= 2) {
       warps.push_back({0, i});
     }
-    for (int i = 1; i < warpsPerCTAMma[rank - 1]; i *= 2) {
+    for (int i = 1; i < warpsPerCTAMma[rank - 2]; i *= 2) {
       warps.push_back({0, 0});
     }
   }

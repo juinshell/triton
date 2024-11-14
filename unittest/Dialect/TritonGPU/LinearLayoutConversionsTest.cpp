@@ -47,6 +47,12 @@ public:
     return DotOperandEncodingAttr::get(&ctx, idx, mmaLayout, /*kWidth=*/kWidth);
   }
 
+  DotOperandEncodingAttr dotMMAv2_3d(int idx, int kWidth, unsigned warps) {
+    auto mmaLayout =
+        mma(2, 0, {1, 16, 8}, {warps, 1, 1}, {1, 1, 1}, {1, 1, 1}, {2, 1, 0});
+    return DotOperandEncodingAttr::get(&ctx, idx, mmaLayout, /*kWidth=*/kWidth);
+  }
+
   AMDMfmaEncodingAttr mfma(ArrayRef<unsigned> warps, unsigned mDim,
                            unsigned nDim, bool isTransposed) {
     SmallVector<unsigned> cpg(warps.size(), 1u);
@@ -533,6 +539,20 @@ TEST_F(LinearLayoutConversionsTest, DotMMAv2_tile_kwidth8) {
                     {S("block"), {}},
                 },
                 {S("dim0"), S("dim1")}));
+}
+
+TEST_F(LinearLayoutConversionsTest, DotMMAv2_3d) {
+  EXPECT_EQ(
+      toLinearLayout({32, 16, 16}, dotMMAv2_3d(0, 2, 16)),
+      LinearLayout(
+          {
+              {S("register"), {{0, 0, 1}, {0, 8, 0}, {0, 0, 8}, {16, 0, 0}}},
+              {S("lane"),
+               {{0, 0, 2}, {0, 0, 4}, {0, 1, 0}, {0, 2, 0}, {0, 4, 0}}},
+              {S("warp"), {{1, 0, 0}, {2, 0, 0}, {4, 0, 0}, {8, 0, 0}}},
+              {S("block"), {}},
+          },
+          {S("dim0"), S("dim1"), S("dim2")}));
 }
 
 TEST_F(LinearLayoutConversionsTest, DotMMAv2_large_warp4_kwidth8) {
