@@ -30,9 +30,10 @@ void lowerDistributedToShared(
 
   auto smemBase = smemObj.getBase();
   auto dstStrides = smemObj.getStrides();
+  auto dstOffsets = smemObj.getOffsets();
   auto inVals = unpackLLElements(loc, adaptorSrc, rewriter);
   storeDistributedToShared(dstTy, srcTy, elemTy, inVals, smemBase, dstStrides,
-                           loc, rewriter, targetInfo, llvmOpCount);
+                           dstOffsets, loc, rewriter, targetInfo, llvmOpCount);
 }
 
 struct GlobalScratchAllocOpConversion

@@ -161,8 +161,8 @@ emitIndices(Location loc, RewriterBase &rewriter, const TargetInfoBase &target,
 bool emitTransferBetweenRegistersAndShared(
     RankedTensorType registerTy, MemDescType sharedTy, Type elemLlvmTy,
     std::optional<int32_t> maxVecElems, Value shmemBase,
-    ArrayRef<Value> shmemStrides, Location loc, RewriterBase &rewriter,
-    const TargetInfoBase &target,
+    ArrayRef<Value> shmemStrides, ArrayRef<Value> shmemOffsets, Location loc,
+    RewriterBase &rewriter, const TargetInfoBase &target,
     std::function<void(VectorType, Value /*shmemAddr*/)> perVectorCallback) {
   MLIRContext *ctx = rewriter.getContext();
 
@@ -182,6 +182,7 @@ bool emitTransferBetweenRegistersAndShared(
     return false;
   }
   auto sharedOrder = triton::gpu::getOrder(sharedTy.getEncoding());
+  auto cSwizzleOffset = shmemOffsets[sharedOrder[0]];
 
   // sharedLayout's in-dims are currently (offset, block).  Reshape to
   // (offsetX1, offsetX2, ..., block) so that we can apply the N-dimensional
@@ -258,6 +259,7 @@ bool emitTransferBetweenRegistersAndShared(
                                {kLane, laneId},
                                {kWarp, warpId},
                                {kBlock, zero}}))));
+    multiDimShmemOffset[0] = add(multiDimShmemOffset[0], cSwizzleOffset);
 
     // Reorder strides according to `order`.  This way they match the
     // multi-dimensional offsets in regToSharedLayout.
@@ -278,8 +280,8 @@ SmallVector<Value> loadSharedToDistributed(RankedTensorType dstTy,
                                            const TargetInfoBase &target) {
   SmallVector<Value> ret;
   bool success = emitTransferBetweenRegistersAndShared(
-      dstTy, srcTy, elemLlvmTy, /*maxVecElems=*/std::nullopt, smemObj.getBase(),
-      smemObj.getStrides(), loc, rewriter, target,
+      dstTy, srcTy, elemLlvmTy, /*maxVecElems=*/std::nullopt, smemObj.base,
+      smemObj.getStrides(), smemObj.getOffsets(), loc, rewriter, target,
       [&](VectorType vecTy, Value vecAddr) {
         auto vecVal = load(vecTy, vecAddr);
         vecVal.setAlignment(vecTy.getNumElements() *

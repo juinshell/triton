@@ -1143,8 +1143,8 @@ emitIndices(Location loc, RewriterBase &rewriter, const TargetInfoBase &target,
 [[nodiscard]] bool emitTransferBetweenRegistersAndShared(
     RankedTensorType registerTy, MemDescType sharedTy, Type elemLlvmTy,
     std::optional<int32_t> maxVecElems, Value shmemBase,
-    ArrayRef<Value> shmemStrides, Location loc, RewriterBase &rewriter,
-    const TargetInfoBase &target,
+    ArrayRef<Value> shmemStrides, ArrayRef<Value> shmemOffsets, Location loc,
+    RewriterBase &rewriter, const TargetInfoBase &target,
     std::function<void(VectorType, Value /*shmemAddr*/)> perVectorCallback);
 
 inline DenseMap<unsigned, Value> getSwizzledSharedPtrs(
@@ -1318,7 +1318,8 @@ SmallVector<Value> loadSharedToDistributed(RankedTensorType dstTy,
 void storeDistributedToShared(
     MemDescType dstTy, RankedTensorType srcTy, Type elemLlvmTy,
     ArrayRef<Value> srcVals, Value smemBase, ArrayRef<Value> dstStrides,
-    Location loc, RewriterBase &rewriter, const TargetInfoBase &target,
+    ArrayRef<Value> dstOffsets, Location loc, RewriterBase &rewriter,
+    const TargetInfoBase &target,
     std::pair<size_t, Type> *const llvmOpCount = nullptr);
 
 inline Value getStructFromSharedMemoryObject(Location loc,
