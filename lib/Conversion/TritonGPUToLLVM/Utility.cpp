@@ -259,7 +259,6 @@ bool emitTransferBetweenRegistersAndShared(
                                {kLane, laneId},
                                {kWarp, warpId},
                                {kBlock, zero}}))));
-    multiDimShmemOffset[0] = add(multiDimShmemOffset[0], cSwizzleOffset);
 
     // Reorder strides according to `order`.  This way they match the
     // multi-dimensional offsets in regToSharedLayout.
