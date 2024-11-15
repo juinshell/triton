@@ -300,12 +300,14 @@ SmallVector<Value> loadSharedToDistributed(RankedTensorType dstTy,
 void storeDistributedToShared(MemDescType dstTy, RankedTensorType srcTy,
                               Type elemLlvmTy, ArrayRef<Value> srcVals,
                               Value smemBase, ArrayRef<Value> dstStrides,
-                              Location loc, RewriterBase &rewriter,
+                              ArrayRef<Value> dstOffsets, Location loc,
+                              RewriterBase &rewriter,
                               const TargetInfoBase &target,
                               std::pair<size_t, Type> *const llvmOpCount) {
   bool success = emitTransferBetweenRegistersAndShared(
       srcTy, dstTy, elemLlvmTy, /*maxVecElems=*/std::nullopt, smemBase,
-      dstStrides, loc, rewriter, target, [&](VectorType vecTy, Value vecAddr) {
+      dstStrides, dstOffsets, loc, rewriter, target,
+      [&](VectorType vecTy, Value vecAddr) {
         ArrayRef<Value> vals = srcVals.take_front(vecTy.getNumElements());
         srcVals = srcVals.drop_front(vecTy.getNumElements());
 
