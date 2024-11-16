@@ -593,7 +593,6 @@ private:
         versionMajor, retShapePerCTA, dotOp.getA().getType().getElementType(),
         numWarps);
 
-    // FIXME Waiting on supporting LLs on convert_layout
     auto warpsPerCTA = getWarpsPerTile(dotOp, retShapePerCTA, versionMajor,
                                        numWarps, instrShape);
     return NvidiaMmaEncodingAttr::get(ctx, versionMajor, versionMinor,
