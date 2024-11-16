@@ -138,13 +138,17 @@ public:
 
   // FIXME [Dot LL]
   // Do for all DotOperandEncodingAttr once we have LLs for all of them
-  static bool isSupportedDotOpLayout(Attribute layout) {
+  static bool isSupportedDotOpLayout(RankedTensorType type) {
+    auto layout = type.getEncoding();
+    auto bitwidth = type.getElementType().getIntOrFloatBitWidth();
     if (auto dot = dyn_cast<DotOperandEncodingAttr>(layout)) {
+      auto kWidth = dot.getKWidth();
       // Use when the SharedToDotOperandMMAv2OrV3 is known to be buggy:
       // - kWidth == 8
-      // - fp8 with kWidth == 4 and warpSize != {numWarps, 1} or {1, numWarps}
+      // - kWidth == 4, bitwidth = 32
       if (auto mma = dyn_cast<NvidiaMmaEncodingAttr>(dot.getParent())) {
-        bool legacyLoweringIsBuggy = dot.getKWidth() >= 4;
+        bool legacyLoweringIsBuggy =
+            kWidth >= 8 || (kWidth == 4 && bitwidth == 32);
         return legacyLoweringIsBuggy && mma.isAmpere();
       }
       if (isa<AMDMfmaEncodingAttr>(dot.getParent()))
@@ -163,7 +167,7 @@ public:
     if (isa<SharedEncodingAttr>(srcLayout) &&
         (isa<BlockedEncodingAttr, MmaEncodingTrait, SliceEncodingAttr,
              LinearEncodingAttr>(dstLayout) ||
-         isSupportedDotOpLayout(dstLayout))) {
+         isSupportedDotOpLayout(dstTy))) {
       return lowerSharedToDistributed(op, adaptor, getTypeConverter(),
                                       rewriter);
     }
@@ -202,8 +206,7 @@ private:
     auto dstTy = op.getResult().getType();
     auto dstShape = dstTy.getShape();
     auto srcSharedLayout = cast<SharedEncodingAttr>(srcTy.getEncoding());
-    auto dstLayout = dstTy.getEncoding();
-    assert((dstShape.size() <= 2 || isSupportedDotOpLayout(dstLayout)) &&
+    assert((dstShape.size() <= 2 || isSupportedDotOpLayout(dstTy)) &&
            "Unexpected rank of ConvertLayout(shared->distributed)");
 
     auto smemObj = LLVM::getSharedMemoryObjectFromStruct(
