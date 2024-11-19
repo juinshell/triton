@@ -1460,11 +1460,9 @@ Attribute LinearEncodingAttr::parse(AsmParser &parser, Type type) {
     repOrder.push_back(intValueAttr.getInt());
   }
 
-  auto numOutDims = repOrder.size();
-
   // Generate standared outDimNames (dim0, dim1, ...)
   SmallVector<StringAttr> outDimNames;
-  for (int i = 0; i < numOutDims; ++i) {
+  for (int i = 0; i < repOrder.size(); ++i) {
     outDimNames.push_back(
         StringAttr::get(parser.getContext(), "dim" + llvm::Twine(i)));
   }
