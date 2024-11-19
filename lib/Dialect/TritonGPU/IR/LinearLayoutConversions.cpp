@@ -839,8 +839,7 @@ toLinearLayout(ArrayRef<int64_t> shape, Attribute layout,
   // Layouts are distributed or shared
   if (auto distributed = dyn_cast<DistributedEncodingTrait>(layout)) {
     return distributed.toLinearLayout(shape);
-  } else {
-    auto shared = cast<SharedEncodingAttr>(layout);
+  } else if (auto shared = dyn_cast<SharedEncodingAttr>(layout)) {
     if (shared.getHasLeadingOffset()) {
       assert(elemBitWidth.has_value());
       return sharedToLinearLayoutLeadingOffset(shape, shared, *elemBitWidth);
@@ -848,6 +847,9 @@ toLinearLayout(ArrayRef<int64_t> shape, Attribute layout,
       return sharedToLinearLayoutNoLeadingOffset(shape, shared);
     }
   }
+
+  // Third party layouts
+  return std::nullopt;
 }
 
 LinearLayout getLayoutWithinBlock(const LinearLayout &layout) {

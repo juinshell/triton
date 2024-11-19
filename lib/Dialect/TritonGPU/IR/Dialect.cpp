@@ -1293,6 +1293,16 @@ LogicalResult
 LinearEncodingAttr::verify(function_ref<InFlightDiagnostic()> emitError,
                            LinearLayout linearLayout,
                            ArrayRef<unsigned> repOrder) {
+  // Example of LinearEncodingAttr
+  // <{bases = {register = [[0, 1], [8, 0], [0, 8], [64, 0]],
+  //            lane = [[0, 2], [0, 4], [1, 0], [2, 0], [4, 0]],
+  //            warp = [[16, 0], [32, 0]],
+  //            block = []},
+  //   repOrder = [1, 0]}>
+  // The input dims must be {register, lane, warp, block}
+  // The output dims of the linear layout should be dim0..dim[rank-1]
+  // and the order must be a permutation of 0..rank-1
+
   if (!isPermutationOfIota(repOrder)) {
     return emitError() << "repOrder must be a permutation of 0..(rank-1). Got "
                        << repOrder;
@@ -1341,7 +1351,11 @@ LinearEncodingAttr::verify(function_ref<InFlightDiagnostic()> emitError,
 
 void LinearEncodingAttr::print(mlir::AsmPrinter &printer) const {
   // We don't use the default implementation as it's a bit too verbose
-  // This prints in the following format that is shape agnostic
+  // This prints in the following format that is shape agnostic, in the sense
+  // that we don't print explicitly the outShape of the LL and instead
+  // we print the minimal LL that would be expanded to the original LL for
+  // that given size.
+  // See LinearencodingAttr::get for the canonicalisation process.
   // <{bases = {register = [[0, 1], [8, 0], [0, 8], [64, 0]],
   //            lane = [[0, 2], [0, 4], [1, 0], [2, 0], [4, 0]],
   //            warp = [[16, 0], [32, 0]],
@@ -1434,21 +1448,6 @@ Attribute LinearEncodingAttr::parse(AsmParser &parser, Type type) {
     bases[inDimName] = std::move(inDimBases);
   }
 
-  auto lanes = bases.find(StringAttr::get(parser.getContext(), "lane"));
-  assert(!lanes->second.empty() && "There must be at least two lanes!");
-  auto numOutDims = lanes->second.begin()->size();
-  assert(numOutDims > 0);
-
-  // Generate standared outDimNames (dim0, dim1, ...)
-  SmallVector<StringAttr> outDimNames;
-  for (int i = 0; i < numOutDims; ++i) {
-    outDimNames.push_back(
-        StringAttr::get(parser.getContext(), "dim" + llvm::Twine(i)));
-  }
-
-  // Create LinearLayout
-  LinearLayout linearLayout(std::move(bases), outDimNames);
-
   // Parse repOrder
   auto dictRepOrder = dict.getAs<ArrayAttr>("repOrder");
   if (!dictRepOrder) {
@@ -1460,6 +1459,18 @@ Attribute LinearEncodingAttr::parse(AsmParser &parser, Type type) {
     auto intValueAttr = mlir::dyn_cast<IntegerAttr>(intAttr);
     repOrder.push_back(intValueAttr.getInt());
   }
+
+  auto numOutDims = repOrder.size();
+
+  // Generate standared outDimNames (dim0, dim1, ...)
+  SmallVector<StringAttr> outDimNames;
+  for (int i = 0; i < numOutDims; ++i) {
+    outDimNames.push_back(
+        StringAttr::get(parser.getContext(), "dim" + llvm::Twine(i)));
+  }
+
+  // Create LinearLayout
+  LinearLayout linearLayout(std::move(bases), outDimNames);
 
   // Create and return the LinearEncodingAttr
   return parser.getChecked<LinearEncodingAttr>(parser.getContext(),
