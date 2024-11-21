@@ -42,6 +42,7 @@ git clone https://github.com/triton-lang/triton.git;
 cd triton;
 
 pip install ninja cmake wheel pybind11; # build-time dependencies
+conda install -c conda-forge libstdcxx-ng
 pip install -e python
 ```
 

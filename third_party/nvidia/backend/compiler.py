@@ -245,7 +245,7 @@ class CUDABackend(BaseBackend):
             metadata["num_warps"] *= num_warp_groups
         mod = src
         # TritonGPU -> LLVM-IR (MLIR)
-        pm = ir.pass_manager(mod.context)
+        pm = ir.pass_manager(mod.context) # cpp mod
         pm.enable_debug()
         # Set up Diagnostic
         if os.environ.get("MLIR_ENABLE_REMARK", "0") == "1":

@@ -222,7 +222,7 @@ static void _launch(int gridX, int gridY, int gridZ, int num_warps, int num_ctas
       config.gridDimX = gridX * clusterDimX;
       config.gridDimY = gridY * clusterDimY;
       config.gridDimZ = gridZ * clusterDimZ;
-      config.blockDimX = 32 * num_warps;
+      config.blockDimX = 32 * num_warps; 
       config.blockDimY = 1;
       config.blockDimZ = 1;
       config.sharedMemBytes = shared_memory;

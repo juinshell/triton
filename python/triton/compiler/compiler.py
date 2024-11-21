@@ -248,12 +248,12 @@ def compile(src, target=None, options=None):
         assert isinstance(src, str), "source must be either AST or a filepath"
         src = IRSource(src)
     extra_options = src.parse_options()
-    print("[triton.compile()] extra_options:", extra_options)
+    # print("[triton.compile()] extra_options:", extra_options)
     options = backend.parse_options(dict(options or dict(), **extra_options)) # fill in some default options
-    print("[triton.compile()] options:", options)
+    # print("[triton.compile()] options:", options)
     # create cache manager
     env_vars = get_cache_invalidating_env_vars()
-    print("[triton.compile()] env_vars:", env_vars)
+    # print("[triton.compile()] env_vars:", env_vars)
     key = f"{triton_key()}-{src.hash()}-{backend.hash()}-{options.hash()}-{str(sorted(env_vars.items()))}"
     # print("[triton.compile()] key:", key)
     hash = hashlib.sha256(key.encode("utf-8")).hexdigest()
@@ -274,9 +274,9 @@ def compile(src, target=None, options=None):
     metadata_filename = f"{file_name}.json"
     # print("[triton.compile()] metadata_filename:", metadata_filename)
     metadata_group = fn_cache_manager.get_group(metadata_filename) or {}
-    print("[triton.compile()] metadata_group:", metadata_group)
+    # print("[triton.compile()] metadata_group:", metadata_group)
     metadata_path = metadata_group.get(metadata_filename)
-    print("[triton.compile()] metadata_path:", metadata_path)
+    # print("[triton.compile()] metadata_path:", metadata_path)
     always_compile = os.environ.get("TRITON_ALWAYS_COMPILE", "0") == "1"
     if not always_compile and metadata_path is not None:
         # cache hit!
@@ -308,7 +308,7 @@ def compile(src, target=None, options=None):
         raise
     use_ir_loc = os.environ.get("USE_IR_LOC", None)
     for ext, compile_ir in list(stages.items())[first_stage:]:
-        print("[triton.compile()] stage:", ext)
+        # print("[triton.compile()] stage:", ext)
         next_module = compile_ir(module, metadata)
         ir_filename = f"{file_name}.{ext}"
         if (fn_override_manager is not None and (full_name := fn_override_manager.get_file(ir_filename)) is not None):
@@ -455,6 +455,8 @@ class CompiledKernel:
                 device = driver.active.get_current_device()
                 stream = driver.active.get_current_stream(device)
             launch_metadata = self.launch_metadata(grid, stream, *args)
+            # print("grid:", grid)
+            # input("Press Enter to continue...")
             self.run(grid[0], grid[1], grid[2], stream, self.function, self.packed_metadata, launch_metadata,
                      CompiledKernel.launch_enter_hook, CompiledKernel.launch_exit_hook, *args)
 

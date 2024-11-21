@@ -274,8 +274,7 @@ def get_cache_manager(key) -> CacheManager:
         __cache_cls = getattr(module, clz_nme)
         __cache_cls_nme = user_cache_manager
 
-    print(f"__cache_cls_nme: {__cache_cls_nme}")
-    # print(f"__cache_cls: {__cache_cls}")
+    # print(f"__cache_cls_nme: {__cache_cls_nme}")
     return __cache_cls(_base64(key))
 
 
