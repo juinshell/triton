@@ -49,11 +49,15 @@ def compile_module_from_src(src, name):
     key = hashlib.sha256(src.encode("utf-8")).hexdigest()
     cache = get_cache_manager(key)
     cache_path = cache.get_file(f"{name}.so")
+    with open("/home/jxdeng/workspace/shmem-triton/triton_main.c", "w") as f:
+        f.write(src)
     if cache_path is None:
         with tempfile.TemporaryDirectory() as tmpdir:
             src_path = os.path.join(tmpdir, "main.c")
             with open(src_path, "w") as f:
                 f.write(src)
+            # with open("/home/jxdeng/workspace/shmem-triton/triton_main.c", "w") as f:
+            #     f.write(src)
             so = _build(name, src_path, tmpdir, library_dirs(), include_dir, libraries)
             with open(so, "rb") as f:
                 cache_path = cache.put(f.read(), f"{name}.so", binary=True)
@@ -204,10 +208,11 @@ static cuLaunchKernelEx_t getLaunchKernelExHandle() {{
   }}
   return cuLaunchKernelExHandle;
 }}
-
+// [SHMEM_TRITON] launch here
 static void _launch(int gridX, int gridY, int gridZ, int num_warps, int num_ctas, int clusterDimX, int clusterDimY, int clusterDimZ, int shared_memory, CUstream stream, CUfunction function{', ' + arg_decls if len(arg_decls) > 0 else ''}) {{
   void *params[] = {{ {', '.join(f"&arg{i}" for i in params)} }};
   if (gridX*gridY*gridZ > 0) {{
+    printf("Launching kernel with grid (%d, %d, %d) and block (%d, %d, %d)\\n", gridX, gridY, gridZ, 32*num_warps, 1, 1);
     if (num_ctas == 1) {{
       CUDA_CHECK(cuLaunchKernel(function, gridX, gridY, gridZ, 32*num_warps, 1, 1, shared_memory, stream, params, 0));
     }} else {{

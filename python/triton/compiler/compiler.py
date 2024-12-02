@@ -1,6 +1,7 @@
 from __future__ import annotations
 import hashlib
 import json
+import traceback
 from .._C.libtriton import get_cache_invalidating_env_vars, ir
 from ..backends import backends
 from ..backends.compiler import GPUTarget
@@ -239,7 +240,8 @@ def filter_traceback(e: BaseException):
 def compile(src, target=None, options=None):
     if target is None:
         target = driver.active.get_current_target()
-    print("[triton.compile()] target:", target)
+    # print("[triton.compile()] stack:")
+    # print(traceback.print_stack())
     assert isinstance(target, GPUTarget), "target must be of GPUTarget type"
     backend = make_backend(target) # find compiler and driver in python/triton/backends/${ARCH}/
     ir_source = not isinstance(src, ASTSource)
