@@ -49,8 +49,8 @@ def compile_module_from_src(src, name):
     key = hashlib.sha256(src.encode("utf-8")).hexdigest()
     cache = get_cache_manager(key)
     cache_path = cache.get_file(f"{name}.so")
-    with open("/home/jxdeng/workspace/shmem-triton/triton_main.c", "w") as f:
-        f.write(src)
+    # with open("/home/jxdeng/workspace/shmem-triton/triton_main.c", "w") as f:
+    #     f.write(src)
     if cache_path is None:
         with tempfile.TemporaryDirectory() as tmpdir:
             src_path = os.path.join(tmpdir, "main.c")
