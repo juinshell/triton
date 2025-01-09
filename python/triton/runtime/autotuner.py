@@ -93,6 +93,38 @@ class Autotuner(KernelInterface):
         import torch
         self.use_cuda_graph = use_cuda_graph and torch.cuda.is_available()
 
+    def _get_compiled_kernels(self, *args, config, **meta):
+        # check for conflicts, i.e. meta-parameters both provided
+        # as kwargs and by the autotuner
+        conflicts = meta.keys() & config.kwargs.keys()
+        if conflicts:
+            raise ValueError(f"Conflicting meta-parameters: {', '.join(conflicts)}."
+                             " Make sure that you don't re-define auto-tuned symbols.")
+        # augment meta-parameters with tunable ones
+        current = dict(meta, **config.all_kwargs())
+        full_nargs = {**self.nargs, **current}
+
+        if config.pre_hook:
+            config.pre_hook(full_nargs)
+        self.pre_hook(args)
+        try:
+            try:
+                ret = self.fn.run(
+                    *args,
+                    **current,
+                )
+            except Exception as e:
+                try:
+                    self.post_hook(args, exception=e)
+                finally:
+                    # Throw exception raised by `self.fn.run`
+                    raise
+            self.post_hook(args, exception=None)
+        except (OutOfResources,):
+            return None
+
+        return ret
+        
     def _bench(self, *args, config, **meta):
         from ..compiler.errors import CompileTimeAssertionFailure
 
@@ -134,6 +166,7 @@ class Autotuner(KernelInterface):
     def run(self, *args, **kwargs):
         self.nargs = dict(zip(self.arg_names, args))
         used_cached_result = True
+        ret_compiled_kernels = None
         if len(self.configs) > 1:
             all_args = {**self.nargs, **kwargs}
             _args = {k: v for (k, v) in all_args.items() if k in self.arg_names}
@@ -148,6 +181,13 @@ class Autotuner(KernelInterface):
                 pruned_configs = self.prune_configs(kwargs)
                 bench_start = time.time()
                 timings = {config: self._bench(*args, config=config, **kwargs) for config in pruned_configs}
+                # [SHMTT]
+                ret_compiled_kernels = [(config, self._get_compiled_kernels(*args, config=config, **kwargs)) for config in pruned_configs]
+                # erase the None values in ret_compiled_kernels
+                for config, compiled_kernels in ret_compiled_kernels:
+                    if compiled_kernels is None:
+                        ret_compiled_kernels.remove((config, compiled_kernels))
+
                 bench_end = time.time()
                 self.bench_time = bench_end - bench_start
                 self.cache[key] = builtins.min(timings, key=timings.get)
@@ -168,7 +208,7 @@ class Autotuner(KernelInterface):
             **config.all_kwargs(),
         )
         self.nargs = None
-        return ret
+        return ret_compiled_kernels
 
     def prune_configs(self, kwargs):
         pruned_configs = self.configs

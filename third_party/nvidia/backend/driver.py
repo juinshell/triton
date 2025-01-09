@@ -212,7 +212,6 @@ static cuLaunchKernelEx_t getLaunchKernelExHandle() {{
 static void _launch(int gridX, int gridY, int gridZ, int num_warps, int num_ctas, int clusterDimX, int clusterDimY, int clusterDimZ, int shared_memory, CUstream stream, CUfunction function{', ' + arg_decls if len(arg_decls) > 0 else ''}) {{
   void *params[] = {{ {', '.join(f"&arg{i}" for i in params)} }};
   if (gridX*gridY*gridZ > 0) {{
-    printf("Launching kernel with grid (%d, %d, %d) and block (%d, %d, %d)\\n", gridX, gridY, gridZ, 32*num_warps, 1, 1);
     if (num_ctas == 1) {{
       CUDA_CHECK(cuLaunchKernel(function, gridX, gridY, gridZ, 32*num_warps, 1, 1, shared_memory, stream, params, 0));
     }} else {{

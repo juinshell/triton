@@ -461,5 +461,6 @@ class CompiledKernel:
             # input("Press Enter to continue...")
             self.run(grid[0], grid[1], grid[2], stream, self.function, self.packed_metadata, launch_metadata,
                      CompiledKernel.launch_enter_hook, CompiledKernel.launch_exit_hook, *args)
+            return launch_metadata
 
         return runner
