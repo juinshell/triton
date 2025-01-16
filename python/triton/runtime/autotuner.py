@@ -182,11 +182,17 @@ class Autotuner(KernelInterface):
                 bench_start = time.time()
                 timings = {config: self._bench(*args, config=config, **kwargs) for config in pruned_configs}
                 # [SHMTT]
-                ret_compiled_kernels = [(config, self._get_compiled_kernels(*args, config=config, **kwargs)) for config in pruned_configs]
+                ret_compiled_kernels = []
+                for config in pruned_configs:
+                    compiled_kernel = self._get_compiled_kernels(*args, config=config, **kwargs)
+                    if compiled_kernel is not None:
+                        ret_compiled_kernels.append((config, compiled_kernel))
+                # ret_compiled_kernels = [(config, self._get_compiled_kernels(*args, config=config, **kwargs)) for config in pruned_configs]
                 # erase the None values in ret_compiled_kernels
-                for config, compiled_kernels in ret_compiled_kernels:
-                    if compiled_kernels is None:
-                        ret_compiled_kernels.remove((config, compiled_kernels))
+                # for config, compiled_kernels in ret_compiled_kernels:
+                #     if compiled_kernels is None:
+                #         # remove
+                #         ret_compiled_kernels.remove
 
                 bench_end = time.time()
                 self.bench_time = bench_end - bench_start
