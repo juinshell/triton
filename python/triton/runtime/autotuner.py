@@ -244,7 +244,7 @@ class Autotuner(KernelInterface):
                     count = 0
                     for future in as_completed(futures):
                         if count % 50 == 0 and int(os.environ.get("RANK", 0)) == 0:
-                            print(f"[rank{torch.distributed.get_rank()}]Progress: {count}/{step}")
+                            print(f"[Autotuner] [rank{torch.distributed.get_rank()}]Progress: {count}/{step}")
                         i, result = future.result()
                         if result[1] is not None:
                             ret_compiled_kernels[i] = result
