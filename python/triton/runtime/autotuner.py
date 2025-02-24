@@ -196,7 +196,7 @@ class Autotuner(KernelInterface):
                 step = len(pruned_configs)
                 ret_compiled_kernels = [None] * step
                 max_threads = min(32, step)
-                assert max_threads >= 32, "max_threads should be at least 32"
+                # assert max_threads >= 32, "max_threads should be at least 32"
                 
                 q = Queue()
                 # 为每个线程深拷贝 *args 中的张量
