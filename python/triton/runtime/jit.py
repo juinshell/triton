@@ -654,6 +654,7 @@ class JITFunction(KernelInterface[T]):
                 return None
             # compile the kernel
             src = self.ASTSource(self, signature, constants, configs[0])
+            print(f"[rank{os.environ.get('RANK', 'NONE')}] compile target: {target}, device: {device}")
             kernel = self.compile(
                 src,
                 target=target,
