@@ -127,6 +127,7 @@ class Autotuner(KernelInterface):
                     raise
             self.post_hook(args, exception=None)
         except (OutOfResources,):
+            print(f"OutOfResources at config: {config}")
             return None
 
         return ret
@@ -170,7 +171,7 @@ class Autotuner(KernelInterface):
             if self.use_cuda_graph:
                 return do_bench_cudagraph(kernel_call, rep=self.num_reps, quantiles=(0.5, 0.2, 0.8))
             return do_bench(kernel_call, warmup=self.num_warmups, rep=self.num_reps, quantiles=(0.5, 0.2, 0.8))
-        except (OutOfResources, CompileTimeAssertionFailure):
+        except (OutOfResources, CompileTimeAssertionFailure) as e:
             return [float("inf"), float("inf"), float("inf")]
 
     def run(self, *args, **kwargs):
@@ -191,6 +192,7 @@ class Autotuner(KernelInterface):
                 pruned_configs = self.prune_configs(kwargs)
                 bench_start = time.time()
                 # timings = {config: self._bench(*args, config=config, **kwargs) for config in pruned_configs}
+                
                 # [SHMTT]
                 timings = {config: self.my_bench(*args, config=config, **kwargs) for config in pruned_configs}
                 step = len(pruned_configs)
@@ -252,11 +254,6 @@ class Autotuner(KernelInterface):
 
                 # 移除 None 的位置，保留有效的结果
                 ret_compiled_kernels = [x for x in ret_compiled_kernels if x is not None]
-                
-                # for _config in pruned_configs:
-                #     compiled_kernel = self._get_compiled_kernel(*args, config=_config, **kwargs)
-                #     if compiled_kernel is not None:
-                #         ret_compiled_kernels.append((_config, compiled_kernel))
 
                 bench_end = time.time()
                 self.bench_time = bench_end - bench_start

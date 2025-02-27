@@ -237,6 +237,9 @@ class KernelParam:
         self.do_not_specialize = do_not_specialize
         self.do_not_specialize_on_alignment = do_not_specialize_on_alignment
 
+    def __str__(self):
+        return f"KernelParam(num={self.num}, name={self.name}, annotation={self.annotation}, annotation_type={self.annotation_type}, is_constexpr={self.is_constexpr}, is_const={self.is_const}, default={self.default}, has_default={self.has_default})"
+
     @cached_property
     def name(self):
         return self._param.name
@@ -654,7 +657,8 @@ class JITFunction(KernelInterface[T]):
                 return None
             # compile the kernel
             src = self.ASTSource(self, signature, constants, configs[0])
-            print(f"[rank{os.environ.get('RANK', 'NONE')}] compile target: {target}, device: {device}")
+            if os.environ.get('SHMTT_DEBUG') == 1:
+                print(f"[rank{os.environ.get('RANK', 'NONE')}] compile target: {target}, device: {device}")
             kernel = self.compile(
                 src,
                 target=target,
@@ -712,6 +716,7 @@ class JITFunction(KernelInterface[T]):
 
         self.params = []
         for i, param in enumerate(self.signature.parameters.values()):
+            print(f"param: {param}")
             dns = i in do_not_specialize or param.name in do_not_specialize
             dns_oa = i in do_not_specialize_on_alignment or param.name in do_not_specialize_on_alignment
             self.params.append(KernelParam(i, param, dns, dns_oa))
