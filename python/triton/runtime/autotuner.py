@@ -208,7 +208,7 @@ class Autotuner(KernelInterface):
                 except Exception as e:
                     print(f"[rank{torch.distributed.get_rank()}]Error at q.put: {e}")
                     exit(1)
-                print(f"[rank{torch.distributed.get_rank()}]args: {args}")
+                # print(f"[rank{torch.distributed.get_rank()}]args: {args}")
                 torch.distributed.barrier()
                 
                 def init_worker(rank):

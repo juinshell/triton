@@ -716,7 +716,6 @@ class JITFunction(KernelInterface[T]):
 
         self.params = []
         for i, param in enumerate(self.signature.parameters.values()):
-            print(f"param: {param}")
             dns = i in do_not_specialize or param.name in do_not_specialize
             dns_oa = i in do_not_specialize_on_alignment or param.name in do_not_specialize_on_alignment
             self.params.append(KernelParam(i, param, dns, dns_oa))
