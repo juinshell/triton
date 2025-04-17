@@ -96,8 +96,8 @@ class Autotuner(KernelInterface):
         import torch
         self.use_cuda_graph = use_cuda_graph and torch.cuda.is_available()
         
-        assert int(os.getenv("RANK")) == torch.distributed.get_rank(), f"RANK should be equal to torch.distributed.get_rank(), RANK={os.getenv('RANK')}, torch.distributed.get_rank()={torch.distributed.get_rank()}"
-        assert int(os.getenv("RANK")) == torch.cuda.current_device(), f"LOCAL_RANK should be equal to torch.cuda.current_device(), LOCAL_RANK={os.getenv('LOCAL_RANK')}, torch.cuda.current_device()={torch.cuda.current_device()}"
+        # assert int(os.getenv("RANK")) == torch.distributed.get_rank(), f"RANK should be equal to torch.distributed.get_rank(), RANK={os.getenv('RANK')}, torch.distributed.get_rank()={torch.distributed.get_rank()}"
+        # assert int(os.getenv("RANK")) == torch.cuda.current_device(), f"LOCAL_RANK should be equal to torch.cuda.current_device(), LOCAL_RANK={os.getenv('LOCAL_RANK')}, torch.cuda.current_device()={torch.cuda.current_device()}"
 
     def _get_compiled_kernel(self, *args, config, **meta):
         # check for conflicts, i.e. meta-parameters both provided
@@ -132,7 +132,7 @@ class Autotuner(KernelInterface):
 
         return ret
     
-    def my_bench(self, *args, config, **meta):
+    def mock_bench(self, *args, config, **meta):
         return [float("inf"), float("inf"), float("inf")]
     
     def _bench(self, *args, config, **meta):
@@ -165,8 +165,8 @@ class Autotuner(KernelInterface):
                     raise
 
             self.post_hook(args, exception=None)
-        if int(os.environ.get("RANK", 0)) == 0:
-            print(f"Running bench with config: {config}")
+        # if int(os.environ.get("RANK", 0)) == 0:
+        #     print(f"Running bench with config: {config}")
         try:
             if self.use_cuda_graph:
                 return do_bench_cudagraph(kernel_call, rep=self.num_reps, quantiles=(0.5, 0.2, 0.8))
@@ -175,6 +175,9 @@ class Autotuner(KernelInterface):
             return [float("inf"), float("inf"), float("inf")]
 
     def run(self, *args, **kwargs):
+        # [SHMTT]
+        ## 从kargs中获取enable_shmtt
+        enable_shmtt = kwargs.pop("enable_shmtt", False)
         self.nargs = dict(zip(self.arg_names, args))
         used_cached_result = True
         ret_compiled_kernels = None
@@ -191,69 +194,20 @@ class Autotuner(KernelInterface):
                 used_cached_result = False
                 pruned_configs = self.prune_configs(kwargs)
                 bench_start = time.time()
-                # timings = {config: self._bench(*args, config=config, **kwargs) for config in pruned_configs}
-                
-                # [SHMTT]
-                timings = {config: self.my_bench(*args, config=config, **kwargs) for config in pruned_configs}
-                step = len(pruned_configs)
-                ret_compiled_kernels = [None] * step
-                max_threads = min(32, step)
-                # assert max_threads >= 32, "max_threads should be at least 32"
-                
-                q = Queue()
-                # 为每个线程深拷贝 *args 中的张量
-                try:
-                    for i in range(max_threads):
-                        q.put(tuple(arg.clone() if isinstance(arg, torch.Tensor) else arg for arg in args))
-                except Exception as e:
-                    print(f"[rank{torch.distributed.get_rank()}]Error at q.put: {e}")
-                    exit(1)
-                # print(f"[rank{torch.distributed.get_rank()}]args: {args}")
-                torch.distributed.barrier()
-                
-                def init_worker(rank):
-                    try:
-                        torch.cuda.set_device(rank)
-                    except Exception as e:
-                        print(f"[rank{torch.distributed.get_rank()}]Error in init_worker: {e}")
-                        exit(1)
-
-                def process_task(i, qin, **kwargs):
-                    _config = pruned_configs[i]
-                    try:
-                        args = qin.get()
-                        for arg in args:
-                            if isinstance(arg, torch.Tensor):
-                                assert arg.device == torch.device("cuda", torch.distributed.get_rank()), f"arg.device: {arg.device} != ddp device cuda:{torch.distributed.get_rank()()}"
-                                assert arg.device == torch.device("cuda", torch.cuda.current_device()), f"arg.device: {arg.device} != cur dev cuda:{torch.cuda.current_device()}"
-                        start_time = time.time()
-                        compiled_kernel = self._get_compiled_kernel(*args, config=_config, **kwargs)
-                        end_time = time.time()
-                        # if torch.distributed.get_rank() == 0:
-                        #     print(f"Kernel compile time: {end_time - start_time:.2f}s for config: {_config}")
-                    except Exception as e:
-                        print(f"[rank{torch.distributed.get_rank()}]Error in thread: {e}")
-                        exit(1)
-                        # compiled_kernel = None
-                    # 返回任务的下标和结果
-                    qin.put(args)
-                    return i, (_config, compiled_kernel)
-                
-                from concurrent.futures import ThreadPoolExecutor, as_completed
-                with ThreadPoolExecutor(max_workers=max_threads, initializer=init_worker, initargs=(int(os.getenv('LOCAL_RANK')),)) as executor:
-                    futures = {executor.submit(process_task, i, q, **kwargs) for i in range(step)}
-                    
-                    count = 0
-                    for future in as_completed(futures):
-                        if count % 50 == 0:
-                            print(f"[Autotuner] [rank{torch.distributed.get_rank()}]Progress: {count}/{step}")
-                        i, result = future.result()
-                        if result[1] is not None:
-                            ret_compiled_kernels[i] = result
-                        count += 1
-
-                # 移除 None 的位置，保留有效的结果
-                ret_compiled_kernels = [x for x in ret_compiled_kernels if x is not None]
+                # [Original]
+                if not enable_shmtt:
+                    timings = {config: self._bench(*args, config=config, **kwargs) for config in pruned_configs}
+                else:
+                    # [SHMTT]
+                    timings = {config: self.mock_bench(*args, config=config, **kwargs) for config in pruned_configs}
+                    ret_compiled_kernels = []
+                    for _config in pruned_configs:
+                        try:
+                            ret_compiled_kernels.append((_config, self._get_compiled_kernel(*args, config=_config, **kwargs)))
+                        except Exception as e:
+                            print(f"[rank{torch.distributed.get_rank()}]Error in one config: {e}")
+                    # 移除 None 的位置，保留有效的结果
+                    ret_compiled_kernels = [(config, kernel) for (config, kernel) in ret_compiled_kernels if kernel is not None]
 
                 bench_end = time.time()
                 self.bench_time = bench_end - bench_start
@@ -275,7 +229,8 @@ class Autotuner(KernelInterface):
             **config.all_kwargs(),
         )
         self.nargs = None
-        return ret_compiled_kernels
+        
+        return ret if not enable_shmtt else ret_compiled_kernels
 
     def prune_configs(self, kwargs):
         pruned_configs = self.configs

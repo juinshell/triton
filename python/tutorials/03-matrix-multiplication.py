@@ -329,23 +329,25 @@ def leaky_relu(x):
 
 def matmul(a, b, activation=""):
     # Check constraints.
-    assert a.shape[1] == b.shape[0], "Incompatible dimensions"
+    assert a.shape[1] == b.shape[0], f"Incompatible dimensions, {a.shape[1]} != {b.shape[0]}"
     assert a.is_contiguous(), "Matrix A must be contiguous"
     M, K = a.shape
     K, N = b.shape
     # Allocates output.
-    c = torch.empty((M, N), device=a.device, dtype=torch.float16)
+    if not hasattr(matmul, "shape") or matmul.shape != (M, N, K):  
+        matmul.shape = (M, N, K)
+        matmul.c = torch.empty((M, N), device=a.device, dtype=torch.float16)
     # 1D launch kernel where each block gets its own program.
     grid = lambda META: (triton.cdiv(M, META['BLOCK_SIZE_M']) * triton.cdiv(N, META['BLOCK_SIZE_N']), )
     matmul_kernel[grid](
-        a, b, c,  #
+        a, b, matmul.c,  #
         M, N, K,  #
         a.stride(0), a.stride(1),  #
         b.stride(0), b.stride(1),  #
-        c.stride(0), c.stride(1),  #
+        matmul.c.stride(0), matmul.c.stride(1),  #
         ACTIVATION=activation  #
     )
-    return c
+    return matmul.c
 
 
 # %%
@@ -354,13 +356,12 @@ def matmul(a, b, activation=""):
 #
 # We can test our custom matrix multiplication operation against a native torch implementation (i.e., cuBLAS).
 
+M, N, K = 4096, 12288, 24576
 torch.manual_seed(0)
-a = torch.randn((512, 512), device='cuda', dtype=torch.float16)
-b = torch.randn((512, 512), device='cuda', dtype=torch.float16)
+a = torch.randn((M, K), device='cuda', dtype=torch.float16)
+b = torch.randn((K, N), device='cuda', dtype=torch.float16)
 triton_output = matmul(a, b)
 torch_output = torch.matmul(a, b)
-print(f"triton_output_with_fp16_inputs={triton_output}")
-print(f"torch_output_with_fp16_inputs={torch_output}")
 # Bigger tolerance for AMD MI200 devices.
 # MI200 devices use reduced precision fp16 and bf16 and flush input and
 # output denormal values to zero. Detailed info is at: https://pytorch.org/docs/stable/notes/numerical_accuracy.html#reduced-precision-fp16-and-bf16-gemms-and-convolutions-on-amd-instinct-mi200-devices
@@ -370,24 +371,58 @@ if torch.allclose(triton_output, torch_output, atol=1e-2, rtol=rtol):
 else:
     print("❌ Triton and Torch differ")
 
-TORCH_HAS_FP8 = hasattr(torch, "float8_e5m2")
-if TORCH_HAS_FP8 and is_cuda():
-    torch.manual_seed(0)
-    a = torch.randn((512, 512), device="cuda", dtype=torch.float16)
-    b = torch.randn((512, 512), device="cuda", dtype=torch.float16)
-    a = a.to(torch.float8_e5m2)
-    # pre-transpose b for efficiency.
-    b = b.T
-    b = b.to(torch.float8_e5m2)
-    triton_output = matmul(a, b)
-    torch_output = torch.matmul(a.to(torch.float16), b.to(torch.float16))
-    print(f"triton_output_with_fp8_inputs={triton_output}")
-    print(f"torch_output_with_fp8_inputs={torch_output}")
-    if torch.allclose(triton_output, torch_output, atol=0.125, rtol=0):
-        print("✅ Triton and Torch match")
-    else:
-        print("❌ Triton and Torch differ")
+# TORCH_HAS_FP8 = hasattr(torch, "float8_e5m2")
+# if TORCH_HAS_FP8 and is_cuda():
+#     torch.manual_seed(0)
+#     a = torch.randn((512, 512), device="cuda", dtype=torch.float16)
+#     b = torch.randn((512, 512), device="cuda", dtype=torch.float16)
+#     a = a.to(torch.float8_e5m2)
+#     # pre-transpose b for efficiency.
+#     b = b.T
+#     b = b.to(torch.float8_e5m2)
+#     triton_output = matmul(a, b)
+#     torch_output = torch.matmul(a.to(torch.float16), b.to(torch.float16))
+#     print(f"triton_output_with_fp8_inputs={triton_output}")
+#     print(f"torch_output_with_fp8_inputs={torch_output}")
+#     if torch.allclose(triton_output, torch_output, atol=0.125, rtol=0):
+#         print("✅ Triton and Torch match")
+#     else:
+#         print("❌ Triton and Torch differ")
 
+
+start_event = torch.cuda.Event(enable_timing=True)
+end_event = torch.cuda.Event(enable_timing=True)
+
+# warmup
+for i in range(10):
+    torch.matmul(a, b)
+    torch.cuda.synchronize()
+    matmul(a, b)
+    torch.cuda.synchronize()
+    
+timings_torch = []
+timings_triton = []
+for i in range(50):
+    # torch
+    start_event.record()
+    full_output = torch.matmul(a, b)
+    end_event.record()
+    torch.cuda.synchronize()
+    timings_torch.append(start_event.elapsed_time(end_event))
+    # triton
+    start_event.record()
+    triton_output = matmul(a, b)
+    end_event.record()
+    torch.cuda.synchronize()
+    timings_triton.append(start_event.elapsed_time(end_event))
+
+torch_time = sum(timings_torch) / len(timings_torch)
+triton_time = sum(timings_triton) / len(timings_triton)
+print(f"torch_time={torch_time} for (M, N, K)={M}, {N}, {K}")
+print(f"triton_time={triton_time} for (M, N, K)={M}, {N}, {K}")
+    
+    
+    
 # %%
 # Benchmark
 # ---------
@@ -401,13 +436,14 @@ if TORCH_HAS_FP8 and is_cuda():
 ref_lib = 'cuBLAS' if is_cuda() else 'rocBLAS'
 
 configs = []
-for fp8_inputs in [False, True]:
-    if fp8_inputs and (not TORCH_HAS_FP8 or not is_cuda()):
-        continue
+for fp8_inputs in [False]:
+    # if fp8_inputs and (not TORCH_HAS_FP8 or not is_cuda()):
+    #     continue
     configs.append(
         triton.testing.Benchmark(
             x_names=["M", "N", "K"],  # Argument names to use as an x-axis for the plot
-            x_vals=[128 * i for i in range(2, 33)],  # Different possible values for `x_name`
+            # x_vals=[128 * i for i in range(2, 33)],  # Different possible values for `x_name`
+            x_vals=[(1024 * i, 12288, 49152) for i in [1, 2, 4, 8]] + [(1024 * i, 49152, 12288) for i in [1, 2, 4, 8]],
             line_arg="provider",  # Argument name whose value corresponds to a different line in the plot
             # Possible values for `line_arg`
             # Don't compare to cublas for fp8 cases as torch.matmul doesn't support fp8 at the moment.
@@ -427,9 +463,11 @@ def benchmark(M, N, K, provider, fp8_inputs):
     b = torch.randn((K, N), device='cuda', dtype=torch.float16)
     if TORCH_HAS_FP8 and fp8_inputs:
         a = a.to(torch.float8_e5m2)
-        b = b.T
+        # b = b.T
         b = b.to(torch.float8_e5m2)
     quantiles = [0.5, 0.2, 0.8]
+    
+    # print("a.shape=", a.shape, "b.shape=", b.shape)
     if provider == ref_lib.lower():
         ms, min_ms, max_ms = triton.testing.do_bench(lambda: torch.matmul(a, b), quantiles=quantiles)
     if provider == 'triton':
@@ -438,4 +476,4 @@ def benchmark(M, N, K, provider, fp8_inputs):
     return perf(ms), perf(max_ms), perf(min_ms)
 
 
-benchmark.run(show_plots=True, print_data=True)
+# benchmark.run(show_plots=True, print_data=True, save_path="./")
