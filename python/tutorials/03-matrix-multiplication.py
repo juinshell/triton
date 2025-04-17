@@ -476,4 +476,4 @@ def benchmark(M, N, K, provider, fp8_inputs):
     return perf(ms), perf(max_ms), perf(min_ms)
 
 
-# benchmark.run(show_plots=True, print_data=True, save_path="./")
+benchmark.run(show_plots=True, print_data=True, save_path="./")
