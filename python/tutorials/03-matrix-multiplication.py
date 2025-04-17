@@ -461,10 +461,10 @@ for fp8_inputs in [False]:
 def benchmark(M, N, K, provider, fp8_inputs):
     a = torch.randn((M, K), device='cuda', dtype=torch.float16)
     b = torch.randn((K, N), device='cuda', dtype=torch.float16)
-    if TORCH_HAS_FP8 and fp8_inputs:
-        a = a.to(torch.float8_e5m2)
-        # b = b.T
-        b = b.to(torch.float8_e5m2)
+    # if TORCH_HAS_FP8 and fp8_inputs:
+    #     a = a.to(torch.float8_e5m2)
+    #     # b = b.T
+    #     b = b.to(torch.float8_e5m2)
     quantiles = [0.5, 0.2, 0.8]
     
     # print("a.shape=", a.shape, "b.shape=", b.shape)
